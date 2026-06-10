@@ -298,7 +298,8 @@ st.sidebar.title("⚙️ 메뉴")
 
 mode = st.sidebar.radio(
     "모드 선택",
-    ["계산기", "월드컵 시뮬레이터"]
+    ["계산기", "월드컵 시뮬레이터"],
+    key="mode_selector"
 )
 
 # =========================
