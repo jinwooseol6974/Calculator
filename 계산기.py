@@ -272,7 +272,7 @@ def worldcup():
 
 if mode == "계산기":
     calculator()
-else:
+else:    {
     worldcup()    "Denmark": 20,
     "Austria": 22,
     "South Korea": 25,
@@ -286,7 +286,7 @@ else:
     "Sweden": 26,
     "Norway": 38,
     "Chile": 42
-
+}
 
 # =========================
 # 사이드바 메뉴
