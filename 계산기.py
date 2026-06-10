@@ -1,40 +1,279 @@
-# app.py
-
 import streamlit as st
-import math
 import random
+import numpy as np
+import math
 
-st.set_page_config(
-    page_title="다기능 계산기 & 월드컵 시뮬레이터",
-    page_icon="🧮",
-    layout="wide"
-)
+st.set_page_config(page_title="World Cup Simulator", page_icon="🏆", layout="wide")
 
 # =========================
-# FIFA 랭킹 데이터
+# MODE SELECT
+# =========================
+
+mode = st.sidebar.radio("모드 선택", ["계산기", "월드컵 시뮬레이터"])
+
+# =========================
+# CALCULATOR
+# =========================
+
+def calculator():
+    st.title("🧮 계산기")
+
+    op = st.selectbox("연산", ["+", "-", "*", "/", "%", "**", "log"])
+
+    if op != "log":
+        a = st.number_input("A", value=1.0)
+        b = st.number_input("B", value=1.0)
+    else:
+        a = st.number_input("값", value=10.0, min_value=0.0001)
+        b = st.number_input("밑", value=10.0, min_value=0.0001)
+
+    if st.button("계산"):
+        if op == "+":
+            r = a + b
+        elif op == "-":
+            r = a - b
+        elif op == "*":
+            r = a * b
+        elif op == "/":
+            r = a / b if b != 0 else 0
+        elif op == "%":
+            r = a % b
+        elif op == "**":
+            r = a ** b
+        elif op == "log":
+            r = math.log(a, b)
+
+        st.success(f"결과: {r}")
+
+
+# =========================
+# WORLD CUP DATA
 # =========================
 
 teams = {
-    "France": 1,
-    "Spain": 2,
-    "Argentina": 3,
-    "England": 4,
-    "Portugal": 5,
-    "Brazil": 6,
-    "Netherlands": 7,
-    "Morocco": 8,
-    "Belgium": 9,
-    "Germany": 10,
-    "Croatia": 11,
-    "Italy": 12,
-    "Colombia": 13,
-    "Senegal": 14,
-    "Mexico": 15,
-    "USA": 16,
-    "Uruguay": 17,
-    "Japan": 18,
-    "Switzerland": 19,
-    "Denmark": 20,
+    "France": 1, "Brazil": 2, "Argentina": 3, "England": 4,
+    "Spain": 5, "Germany": 6, "Portugal": 7, "Netherlands": 8,
+    "Belgium": 9, "Italy": 10, "Croatia": 11, "Uruguay": 12,
+    "USA": 13, "Mexico": 14, "Canada": 15, "Japan": 16,
+    "Korea": 17, "Morocco": 18, "Senegal": 19, "Switzerland": 20,
+    "Denmark": 21, "Poland": 22, "Austria": 23, "Australia": 24,
+    "Ecuador": 25, "Colombia": 26, "Chile": 27, "Peru": 28,
+    "Nigeria": 29, "Egypt": 30, "Ghana": 31, "Iran": 32,
+    "Saudi Arabia": 33, "Qatar": 34, "South Africa": 35, "Tunisia": 36,
+    "Serbia": 37, "Ukraine": 38, "Turkey": 39, "Norway": 40,
+    "Wales": 41, "Scotland": 42, "Costa Rica": 43, "Panama": 44,
+    "New Zealand": 45, "Iceland": 46, "Finland": 47, "Hungary": 48
+}
+
+GROUPS = [chr(i) for i in range(65, 77)]  # A-L
+
+
+# =========================
+# STRENGTH MODEL
+# =========================
+
+def strength(rank):
+    return 2100 - rank * 8
+
+
+def win_prob(a, b):
+    ra, rb = strength(a), strength(b)
+    return 1 / (1 + 10 ** ((rb - ra) / 400))
+
+
+# =========================
+# MATCH SIMULATION
+# =========================
+
+def simulate_score(t1, t2):
+    s1, s2 = strength(teams[t1]), strength(teams[t2])
+    total = s1 + s2
+
+    xg1 = 0.3 + 2.5 * (s1 / total)
+    xg2 = 0.3 + 2.5 * (s2 / total)
+
+    g1 = np.random.poisson(xg1)
+    g2 = np.random.poisson(xg2)
+
+    return g1, g2
+
+
+# =========================
+# PENALTY
+# =========================
+
+def penalty(t1, t2):
+    p1 = win_prob(teams[t1], teams[t2])
+
+    s1 = s2 = 0
+    for i in range(5):
+        if random.random() < p1:
+            s1 += 1
+        if random.random() < (1 - p1):
+            s2 += 1
+
+    while s1 == s2:
+        if random.random() < p1:
+            s1 += 1
+        else:
+            s2 += 1
+
+    return s1, s2
+
+
+# =========================
+# KNOCKOUT MATCH
+# =========================
+
+def knockout(t1, t2):
+    g1, g2 = simulate_score(t1, t2)
+
+    if g1 > g2:
+        return t1, g1, g2, "90min"
+    if g2 > g1:
+        return t2, g1, g2, "90min"
+
+    e1, e2 = simulate_score(t1, t2)
+    g1 += e1
+    g2 += e2
+
+    if g1 > g2:
+        return t1, g1, g2, "ET"
+    if g2 > g1:
+        return t2, g1, g2, "ET"
+
+    p1, p2 = penalty(t1, t2)
+    winner = t1 if p1 > p2 else t2
+
+    return winner, g1, g2, f"PK {p1}-{p2}"
+
+
+# =========================
+# GROUP STAGE
+# =========================
+
+def create_groups():
+    teams_list = list(teams.keys())
+    random.shuffle(teams_list)
+
+    groups = {}
+    for i, g in enumerate(GROUPS):
+        groups[g] = teams_list[i*4:(i+1)*4]
+
+    return groups
+
+
+def play_group(group_teams):
+    table = {t: {"pts":0,"gf":0,"ga":0,"gd":0} for t in group_teams}
+
+    matches = [
+        (0,1),(2,3),
+        (0,2),(1,3),
+        (0,3),(1,2)
+    ]
+
+    for a,b in matches:
+        t1, t2 = group_teams[a], group_teams[b]
+        g1, g2 = simulate_score(t1, t2)
+
+        table[t1]["gf"] += g1
+        table[t1]["ga"] += g2
+        table[t2]["gf"] += g2
+        table[t2]["ga"] += g1
+
+        if g1 > g2:
+            table[t1]["pts"] += 3
+        elif g2 > g1:
+            table[t2]["pts"] += 3
+        else:
+            table[t1]["pts"] += 1
+            table[t2]["pts"] += 1
+
+    for t in table:
+        table[t]["gd"] = table[t]["gf"] - table[t]["ga"]
+
+    return sorted(
+        table.items(),
+        key=lambda x: (x[1]["pts"], x[1]["gd"], x[1]["gf"]),
+        reverse=True
+    )
+
+
+# =========================
+# TOURNAMENT
+# =========================
+
+def tournament(teams_list):
+    round_names = ["32강","16강","8강","4강","결승"]
+
+    round_i = 0
+
+    while len(teams_list) > 1:
+        st.subheader(round_names[round_i])
+        round_i += 1
+
+        winners = []
+
+        for i in range(0, len(teams_list), 2):
+            t1, t2 = teams_list[i], teams_list[i+1]
+            w, g1, g2, mode = knockout(t1, t2)
+
+            st.write(f"{t1} {g1}-{g2} {t2} → 🏆 {w} ({mode})")
+            winners.append(w)
+
+        teams_list = winners
+
+    return teams_list[0]
+
+
+# =========================
+# WORLD CUP MODE
+# =========================
+
+def worldcup():
+    st.title("🏆 2026 월드컵 시뮬레이터")
+
+    if st.button("🎲 조 추첨 + 시작"):
+
+        groups = create_groups()
+
+        qualified = []
+
+        st.subheader("📦 조별리그")
+
+        for g, teams_list in groups.items():
+
+            st.write(f"### Group {g}")
+            result = play_group(teams_list)
+
+            for i, (team, stat) in enumerate(result):
+                st.write(f"{i+1}. {team} {stat['pts']}pt")
+
+            # 4조 2팀, 8조 3팀 진출
+            if g in ["A","B","C","D"]:
+                qualified += [r[0] for r in result[:2]]
+            else:
+                qualified += [r[0] for r in result[:3]]
+
+        random.shuffle(qualified)
+
+        st.subheader("🏆 토너먼트")
+
+        champion = tournament(qualified)
+
+        st.success(f"🏆 우승: {champion}")
+
+        st.balloons()
+
+
+# =========================
+# RUN
+# =========================
+
+if mode == "계산기":
+    calculator()
+else:
+    worldcup()    "Denmark": 20,
     "Austria": 22,
     "South Korea": 25,
     "Australia": 27,
